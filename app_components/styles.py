@@ -46,7 +46,7 @@ APP_CSS = """
 
 .mp-hero {
   position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.12);
-  border-radius: 24px; color: white; padding: clamp(2rem, 6vw, 5.6rem);
+  border-radius: 24px; color: white; padding: clamp(1.6rem, 3.3vw, 2.9rem);
   background:
     radial-gradient(circle at 88% 20%, rgba(72,220,255,.23), transparent 19rem),
     radial-gradient(circle at 70% 88%, rgba(139,124,255,.25), transparent 24rem),
@@ -69,12 +69,12 @@ APP_CSS = """
   text-transform: uppercase; margin-bottom: 1rem;
 }
 .mp-hero h1 {
-  max-width: 850px; font-size: clamp(2.5rem, 6.2vw, 5.7rem); line-height: .97;
-  letter-spacing: -.06em; margin: 0 0 1.3rem; color: white;
+  max-width: 850px; font-size: clamp(2.2rem, 4vw, 3.75rem); line-height: 1;
+  letter-spacing: -.055em; margin: 0 0 .9rem; color: white;
 }
 .mp-hero p {
-  max-width: 750px; color: #c9d2df; font-size: clamp(1rem, 2vw, 1.25rem);
-  line-height: 1.65; margin: 0;
+  max-width: 750px; color: #c9d2df; font-size: clamp(.92rem, 1.35vw, 1.05rem);
+  line-height: 1.48; margin: 0;
 }
 .mp-accent { color: var(--mp-lime); }
 

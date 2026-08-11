@@ -144,6 +144,8 @@ def navigate(page: str) -> None:
 
 def open_product_explanation(product_key: str) -> None:
     st.session_state.selected_product_key = product_key
+    if st.session_state.get("demo_guide_started", False):
+        st.session_state.demo_step_explanation = True
     navigate("Product Explanation")
 
 
@@ -187,7 +189,7 @@ def render_footer() -> None:
     st.markdown(
         f"""
         <div class="mp-footer">
-          <strong>SKUNIVO</strong> · Built by Team YOUNGHTT<br>
+          <strong>SKUNIVO</strong> · {html.escape(t("Built by Team YOUNGHTT"))}<br>
           {html.escape(t("Human review remains part of every decision. Scores are peer-relative and use precomputed marketplace signals."))}
         </div>
         """,
@@ -225,7 +227,6 @@ DEMO_STEPS = [
     ("demo_step_prioritization", "Open the product priority queue"),
     ("demo_step_explanation", "Review an AI-assisted product explanation"),
     ("demo_step_decision", "Accept or override a recommendation"),
-    ("demo_step_feedback", "Submit prototype feedback"),
 ]
 
 
@@ -236,11 +237,16 @@ def mark_demo_step(key: str) -> None:
 
 def start_demo_guide() -> None:
     st.session_state.demo_guide_started = True
+    st.session_state.demo_step_prioritization = True
+    st.session_state.filter_country = "id"
     navigate("Product Prioritization")
 
 
 def demo_guide_panel() -> None:
-    with st.sidebar.expander(t("Demo Guide · 4 steps"), expanded=False):
+    with st.sidebar.expander(
+        t("Demo Guide · 3 steps"),
+        expanded=st.session_state.get("demo_guide_started", False),
+    ):
         if not st.session_state.get("demo_guide_started", False):
             st.caption(t("Start from Home. Progress updates automatically in this browser session."))
         completed = sum(
@@ -307,11 +313,17 @@ def home_page(products: pd.DataFrame) -> None:
         """,
         unsafe_allow_html=True,
     )
-    cta_left, cta_right, _ = st.columns([1.1, 1, 3])
+    cta_left, cta_middle, cta_right, _ = st.columns([1.5, 1.2, 1, 2.3])
     with cta_left:
         st.button(
-            t("Launch Decision Copilot →"),
+            t("Start 3-minute judge demo →"),
             type="primary",
+            width="stretch",
+            on_click=start_demo_guide,
+        )
+    with cta_middle:
+        st.button(
+            t("Explore independently"),
             width="stretch",
             on_click=navigate,
             args=("Product Prioritization",),
@@ -429,10 +441,10 @@ def home_page(products: pd.DataFrame) -> None:
 
     section_header(
         "Demo Guide",
-        "A four-step walkthrough for judges and test users. Progress updates automatically in this browser session.",
+        "A focused three-step walkthrough from ranked queue to accountable human decision.",
     )
     st.button(
-        t("Start Demo Guide"),
+        t("Start 3-minute judge demo"),
         type="primary",
         disabled=st.session_state.get("demo_guide_started", False),
         on_click=start_demo_guide,
@@ -619,10 +631,6 @@ def executive_page(products: pd.DataFrame, charts: dict[str, Path]) -> None:
     render_boundary()
 
 
-def _multiselect_all(label: str, options: list, key: str) -> list:
-    return st.multiselect(label, options, default=options, key=key)
-
-
 def _localized_selectbox(container, label: str, options: list[str], key: str, **kwargs):
     labels = [t(option) for option in options]
     current = st.session_state.get(key)
@@ -638,15 +646,26 @@ def _localized_selectbox(container, label: str, options: list[str], key: str, **
 def prioritization_page(products: pd.DataFrame) -> None:
     mark_demo_step("demo_step_prioritization")
     page_header("Product Prioritization")
-    st.caption(t("Open the filter panel to define a market-specific review context."))
+    st.caption(t("Start with one market. Open advanced filters only when the decision requires them."))
 
-    with st.expander(t("Filter decision queue"), expanded=True):
-        countries = _multiselect_all(
-            t("Country"),
-            ["id", "vn"],
-            "filter_countries",
-        )
-        scoped = products[products["country_code"].isin(countries)] if countries else products.iloc[0:0]
+    if "filter_country" not in st.session_state:
+        st.session_state.filter_country = "id"
+    country = st.segmented_control(
+        t("Decision market"),
+        ["id", "vn"],
+        key="filter_country",
+        selection_mode="single",
+        format_func=lambda value: {"id": "Indonesia", "vn": "Vietnam"}[value],
+    ) or "id"
+    countries = [country]
+    scoped = products[products["country_code"].eq(country)]
+    st.caption(
+        t("Indonesia is the recommended pilot market.")
+        if country == "id"
+        else t("Vietnam remains available with lower AI-model confidence and stronger human review.")
+    )
+
+    with st.expander(t("Advanced filters"), expanded=False):
 
         row1 = st.columns(3)
         shops = row1[0].multiselect(
@@ -733,18 +752,16 @@ def prioritization_page(products: pd.DataFrame) -> None:
         )
 
         price_range = None
-        if len(countries) == 1 and not scoped.empty:
+        if not scoped.empty:
             price_min, price_max = safe_range(scoped["price"])
-            currency = format_local_price(0, countries[0]).split()[0]
+            currency = format_local_price(0, country).split()[0]
             price_range = st.slider(
                 f"{t('Current price')} · {t('local')} {currency} {t('units')}",
                 int(price_min),
                 max(int(price_max), int(price_min) + 1),
                 (int(price_min), max(int(price_max), int(price_min) + 1)),
-                key=f"filter_price_{countries[0]}",
+                key=f"filter_price_{country}",
             )
-        else:
-            st.caption(t("Select exactly one country to enable a local-currency price filter."))
 
     filters = {
         "countries": countries,
@@ -969,99 +986,114 @@ def product_explanation_page(products: pd.DataFrame) -> None:
         unsafe_allow_html=True,
     )
 
-    section_header("Observed product and shop signals")
-    metrics = [
-        ("Current price", format_local_price(product["price"], country)),
-        ("Original price", format_local_price(product.get("original_price"), country)),
-        ("Discount", f"{product['displayed_discount_pct']:.1f}%"),
-        ("Likes", format_number(product["liked_count"])),
-        ("Product rating", display_value(product.get("rating_star"), digits=2)),
-        ("Rating count", format_number(product["rating_count"])),
-        ("Monthly sold-value proxy", format_number(product["monthly_sold_value"], 1)),
-        ("Shop rating", display_value(product.get("shop_rating"), digits=2)),
-        ("Shop followers", format_number(product.get("shop_follower_count"))),
-        ("Official shop", bool_label(product.get("is_official_shop"))),
-    ]
-    cols = st.columns(5)
-    for index, (label, value) in enumerate(metrics):
-        cols[index % 5].metric(t(label), t(value) if isinstance(value, str) else value)
-
     section_header(
-        "Peer-relative benchmarks",
-        "Percentiles are calculated within country and platform category; higher is not automatically better for every component.",
+        "Decision at a glance",
+        "Read the recommendation, reasons, and next action first. Technical evidence remains available below.",
     )
-    peer_metrics = [
-        ("Engagement peer percentile", format_percent(product.get("likes_pct_peer"))),
-        ("Sold-value peer percentile", format_percent(product.get("sold_pct_peer"))),
-        ("Price peer percentile", format_percent(product.get("price_pct_country_category"))),
-        ("Discount peer percentile", format_percent(product.get("discount_pct_peer"))),
-        ("Shop credibility", format_percent(product.get("shop_credibility"))),
-        ("Conversion-gap component", format_percent(product.get("conversion_gap"))),
-    ]
-    cols = st.columns(3)
-    for index, (label, value) in enumerate(peer_metrics):
-        cols[index % 3].metric(t(label), value)
+    reason_column, action_column = st.columns([1.05, 0.95])
+    with reason_column:
+        st.markdown(f"### {t('Why this recommendation')}")
+        for reason_name in ("reason_1", "reason_2", "reason_3"):
+            reason = product.get(reason_name)
+            if reason is not None and not pd.isna(reason):
+                st.markdown(
+                    f'<div class="mp-reason">{html.escape(t(str(reason)))}</div>',
+                    unsafe_allow_html=True,
+                )
 
-    section_header(
-        "AI-assisted contextual benchmark",
-        "A shop-grouped, cross-validated model estimates the sold-value level associated with the current listing context. It is not a future-sales forecast.",
+    guidance = GUIDANCE.get(
+        str(product["recommendation_label"]),
+        ["Review the observed signals with a merchandiser."],
     )
-    expected = product.get("ai_contextual_sold_benchmark")
-    observed = product.get("monthly_sold_value")
-    gap = product.get("ai_benchmark_gap_pct")
-    model_confidence = str(product.get("ai_model_confidence", "Unavailable"))
-    benchmark_metrics = st.columns(4)
-    benchmark_metrics[0].metric(
-        t("Model benchmark"),
-        format_number(expected, 1),
-        help=t("Cross-validated contextual sold-value proxy estimate."),
-    )
-    benchmark_metrics[1].metric(t("Observed proxy"), format_number(observed, 1))
-    benchmark_metrics[2].metric(
-        t("Observed gap"),
-        t("Not available") if gap is None or pd.isna(gap) else f"{float(gap):+.0%}",
-    )
-    benchmark_metrics[3].metric(t("Model confidence"), t(model_confidence))
-    signal_class = "mp-badge-teal" if model_confidence == "High" else "mp-badge-orange"
-    st.markdown(
-        f"""
-        <div class="mp-card">
-          <span class="mp-kicker">{html.escape(t("AI DECISION BRIEF"))}</span><br>
-          <span class="mp-badge {signal_class}">{html.escape(t(str(product.get("ai_benchmark_signal", "Unavailable"))))}</span>
-          <span class="mp-badge">{html.escape(confidence_text(model_confidence, model=True))}</span>
-          <p style="margin-top:1rem">{html.escape(ai_decision_brief(product, st.session_state.get("language", "en")))}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    local_drivers = product.get("ai_local_drivers")
-    if local_drivers is not None and not pd.isna(local_drivers):
-        with st.expander(t("Model contribution detail for this representative product")):
-            for driver in str(local_drivers).split(" | "):
-                st.markdown(f"- {t(driver)}")
-    if country == "vn":
-        st.warning(t("Vietnam actionable-model ranking quality is limited. Treat this benchmark as supporting evidence only; transparent scoring and human review take priority."))
+    with action_column:
+        st.markdown(f"### {t('Suggested next action')}")
+        st.markdown(
+            '<div class="mp-card">'
+            + "".join(f"<div class='mp-reason'>{html.escape(t(item))}</div>" for item in guidance)
+            + f"<p style='margin-top:1rem'>{html.escape(t('These are review prompts, not mandatory actions or outcome guarantees.'))}</p></div>",
+            unsafe_allow_html=True,
+        )
+        st.button(
+            t("Open Decision Log →"),
+            type="primary",
+            width="stretch",
+            on_click=open_decision_log,
+            args=(selected_key,),
+        )
 
-    section_header("Why this recommendation")
-    for reason_name in ("reason_1", "reason_2", "reason_3"):
-        reason = product.get(reason_name)
-        if reason is not None and not pd.isna(reason):
-            st.markdown(f'<div class="mp-reason">{html.escape(t(str(reason)))}</div>', unsafe_allow_html=True)
+    with st.expander(t("Supporting evidence and model details"), expanded=False):
+        section_header("Observed product and shop signals")
+        metrics = [
+            ("Current price", format_local_price(product["price"], country)),
+            ("Original price", format_local_price(product.get("original_price"), country)),
+            ("Discount", f"{product['displayed_discount_pct']:.1f}%"),
+            ("Likes", format_number(product["liked_count"])),
+            ("Product rating", display_value(product.get("rating_star"), digits=2)),
+            ("Rating count", format_number(product["rating_count"])),
+            ("Monthly sold-value proxy", format_number(product["monthly_sold_value"], 1)),
+            ("Shop rating", display_value(product.get("shop_rating"), digits=2)),
+            ("Shop followers", format_number(product.get("shop_follower_count"))),
+            ("Official shop", bool_label(product.get("is_official_shop"))),
+        ]
+        cols = st.columns(5)
+        for index, (label, value) in enumerate(metrics):
+            cols[index % 5].metric(t(label), t(value) if isinstance(value, str) else value)
 
-    section_header("Decision-support guidance")
-    guidance = GUIDANCE.get(str(product["recommendation_label"]), ["Review the observed signals with a merchandiser."])
-    st.markdown(
-        '<div class="mp-card">'
-        + "".join(f"<div class='mp-reason'>{html.escape(t(item))}</div>" for item in guidance)
-        + f"<p style='margin-top:1rem'>{html.escape(t('These are review prompts, not mandatory actions or outcome guarantees.'))}</p></div>",
-        unsafe_allow_html=True,
-    )
-    st.button(
-        t("Open Decision Log →"),
-        type="primary",
-        on_click=open_decision_log,
-        args=(selected_key,),
-    )
+        section_header(
+            "Peer-relative benchmarks",
+            "Percentiles are calculated within country and platform category; higher is not automatically better for every component.",
+        )
+        peer_metrics = [
+            ("Engagement peer percentile", format_percent(product.get("likes_pct_peer"))),
+            ("Sold-value peer percentile", format_percent(product.get("sold_pct_peer"))),
+            ("Price peer percentile", format_percent(product.get("price_pct_country_category"))),
+            ("Discount peer percentile", format_percent(product.get("discount_pct_peer"))),
+            ("Shop credibility", format_percent(product.get("shop_credibility"))),
+            ("Conversion-gap component", format_percent(product.get("conversion_gap"))),
+        ]
+        cols = st.columns(3)
+        for index, (label, value) in enumerate(peer_metrics):
+            cols[index % 3].metric(t(label), value)
+
+        section_header(
+            "AI-assisted contextual benchmark",
+            "A shop-grouped, cross-validated model estimates the sold-value level associated with the current listing context. It is not a future-sales forecast.",
+        )
+        expected = product.get("ai_contextual_sold_benchmark")
+        observed = product.get("monthly_sold_value")
+        gap = product.get("ai_benchmark_gap_pct")
+        model_confidence = str(product.get("ai_model_confidence", "Unavailable"))
+        benchmark_metrics = st.columns(4)
+        benchmark_metrics[0].metric(
+            t("Model benchmark"),
+            format_number(expected, 1),
+            help=t("Cross-validated contextual sold-value proxy estimate."),
+        )
+        benchmark_metrics[1].metric(t("Observed proxy"), format_number(observed, 1))
+        benchmark_metrics[2].metric(
+            t("Observed gap"),
+            t("Not available") if gap is None or pd.isna(gap) else f"{float(gap):+.0%}",
+        )
+        benchmark_metrics[3].metric(t("Model confidence"), t(model_confidence))
+        signal_class = "mp-badge-teal" if model_confidence == "High" else "mp-badge-orange"
+        st.markdown(
+            f"""
+            <div class="mp-card">
+              <span class="mp-kicker">{html.escape(t("AI DECISION BRIEF"))}</span><br>
+              <span class="mp-badge {signal_class}">{html.escape(t(str(product.get("ai_benchmark_signal", "Unavailable"))))}</span>
+              <span class="mp-badge">{html.escape(confidence_text(model_confidence, model=True))}</span>
+              <p style="margin-top:1rem">{html.escape(ai_decision_brief(product, st.session_state.get("language", "en")))}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        local_drivers = product.get("ai_local_drivers")
+        if local_drivers is not None and not pd.isna(local_drivers):
+            with st.expander(t("Model contribution detail for this representative product")):
+                for driver in str(local_drivers).split(" | "):
+                    st.markdown(f"- {t(driver)}")
+        if country == "vn":
+            st.warning(t("Vietnam actionable-model ranking quality is limited. Treat this benchmark as supporting evidence only; transparent scoring and human review take priority."))
 
     export_fields = {
         "country": product["country_name"],
