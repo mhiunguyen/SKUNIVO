@@ -36,3 +36,8 @@ current three-day snapshot dataset.
 
 For architecture, deployment, limitations, troubleshooting, screenshots, and the
 demo test script, see [README_MVP.md](README_MVP.md).
+
+For a new maintainer or a new Codex account, start with
+[HANDOFF.md](HANDOFF.md). It contains the current project state, security
+boundaries, verification commands, deployment ownership checklist, and a
+ready-to-paste continuation prompt.

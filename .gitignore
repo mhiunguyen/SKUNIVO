@@ -18,9 +18,11 @@ deliverables/
 # Local analysis assets not required by the public Streamlit deployment
 Data/
 reports/
-notebooks/
-src/
-tests/
+
+# Presentation render/QA intermediates (keep only final PPTX and PDF)
+.tmp_presentation/
+proposal/*.inspect.ndjson
+proposal/*/
 
 # Publish only the precomputed files consumed by app_components/data_loader.py
 outputs/*

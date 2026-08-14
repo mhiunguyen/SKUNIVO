@@ -20,8 +20,9 @@ calculate ROAS, automate pricing, or guarantee outcomes.
 
 - Premium landing experience with a real recommendation preview
 - Executive portfolio overview with normalized market views
-- Product prioritization with market, shop, category, decision, confidence, score,
-  promotion, official-shop, engagement, and local-price filters
+- Indonesia-first product prioritization with a simple market selector and collapsed
+  advanced filters for shop, category, decision, confidence, score, promotion,
+  official-shop, engagement, and local price
 - Auditable product explanations with peer percentiles and business-language reasons
 - A visible AI-assisted contextual benchmark using shop-grouped out-of-fold predictions
 - A human Decision Log for accepting, overriding, or deferring recommendations
@@ -29,7 +30,7 @@ calculate ROAS, automate pricing, or guarantee outcomes.
 - Methodology, model diagnostics, robustness, limitations, and data roadmap
 - Structured usability feedback with local append or public-session download
 - English and Vietnamese interface switching with stable internal decision keys
-- Eight-page in-app navigation and a four-step automatically tracked Demo Guide
+- Eight-page in-app navigation and a three-step, three-minute judge Demo Guide
 
 ## 3. Project structure
 
@@ -41,12 +42,18 @@ app_components/
   charts.py                    Chart helpers and normalized summaries
   recommendation_ui.py         Score formula, presets, tiers, guidance
   feedback.py                  Validation and append/session export behavior
+  decision_log.py              Human decision record validation and export
+  persistence.py               Google Apps Script delivery without secret exposure
+  i18n.py                      English/Vietnamese display translations
   styles.py                    Brand and responsive application styling
+src/                           Reproducible feature, model, score, and recommendation code
+notebooks/                     Discovery, EDA, and decision-intelligence entry notebooks
 outputs/                       Precomputed recommendation and evaluation files
 outputs/charts/                High-resolution chart assets
+proposal/                      Final competition PPTX and PDF
 .streamlit/config.toml         Public-safe Streamlit configuration
 .streamlit/secrets.toml.example Optional secret template; contains no credentials
-tests/test_mvp.py              Formula, data, filter, and append tests
+tests/                         Formula, data, page-flow, persistence, and UI smoke tests
 ```
 
 The app resolves every data path relative to `app.py`; no local absolute path is
@@ -80,10 +87,10 @@ streamlit run app.py
 The local app opens at the URL printed by Streamlit, normally
 `http://localhost:8501`.
 
-To validate the core decision logic:
+To validate the complete application:
 
 ```powershell
-python -m unittest tests.test_mvp -v
+python -m unittest discover -s tests -v
 ```
 
 ## 6. Public deployment instructions
@@ -96,9 +103,10 @@ The repository is ready for Streamlit Community Cloud.
 2. Push the repository to GitHub.
 3. In Streamlit Community Cloud, choose **Create app**.
 4. Select the repository and branch, then set **Main file path** to `app.py`.
-5. Add `SKUNIVO_PUBLIC_MODE=true` in the app settings if you want the
-   feedback screen to explicitly use session/download mode.
-6. Deploy and confirm all eight pages, charts, Decision Log, and product selectors.
+5. Add the Google Sheets secrets described below if persistent feedback and
+   Decision Log records are required.
+6. Deploy and confirm the three-step judge demo, all eight pages, charts,
+   Decision Log, and language switching.
 
 Exact first-push commands (replace the placeholder; do not commit secrets):
 
@@ -161,8 +169,8 @@ Do not send or commit a Google password, verification code, or the real webhook 
   compare column names with `app_components/data_loader.py`. Reasonable aliases are
   supported centrally.
 - **Charts do not render:** confirm Git LFS did not replace PNGs with pointer files.
-- **No price filter:** select exactly one country; this is an intentional
-  cross-currency safeguard.
+- **No price filter:** expand **Advanced filters** after selecting Indonesia or
+  Vietnam. The app intentionally exposes only one local-currency market at a time.
 - **Feedback is temporary:** configure the Google Apps Script webhook and confirm the
   app shows “connected to Team YOUNGHTT's Google Sheet.”
 - **Port already in use:** run `streamlit run app.py --server.port 8502`.
@@ -182,10 +190,10 @@ Capture these after deployment and replace the placeholders in project materials
 
 ## 11. Demo testing script
 
-1. Open **Home** and start the four-step **Demo Guide**.
-2. Filter to one country, one shop, and an active-review recommendation.
-3. Open one Product Explanation and compare its transparent score with the
-   AI-assisted contextual benchmark.
+1. Open **Home** and select **Start 3-minute judge demo**.
+2. Confirm Indonesia is selected and advanced filters are collapsed. Open a
+   high-priority product from the queue.
+3. Read **Decision at a glance** first; expand supporting evidence only when needed.
 4. Open **Decision Log**, accept or override the recommendation, select an action,
    define a success metric, and save.
 5. Confirm the Google Sheet receives a row under `Decisions`.
